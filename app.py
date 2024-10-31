@@ -3,6 +3,7 @@ import pandas as pd
 import joblib
 import random
 import re
+import os
 
 # -------------------------------
 # Load the Model and Feature Columns
@@ -54,6 +55,7 @@ label_mapping = {
     3: 'Engage'
 }
 
+# Function to shuffle the dataset
 def shuffle_dataset(df):
     df_shuffled = df.copy()
     for related_columns in columns_to_shuffle:
@@ -61,11 +63,13 @@ def shuffle_dataset(df):
         df_shuffled[related_columns] = shuffled_subset
     return df_shuffled
 
+# Function to get a random scenario
 def get_random_scenario(df):
     random_index = random.randint(0, len(df) - 1)
     scenario = df.iloc[random_index]
     return scenario
 
+# Function to display the scenario and get user's decision
 def display_scenario(scenario):
     st.header("Scenario")
     columns_to_display = [
@@ -82,6 +86,32 @@ def display_scenario(scenario):
     decision = st.selectbox("What is your decision?", decision_options)
     return decision
 
+# Function to save participant data to CSV
+def save_data_to_csv(participant_decision, scenario_details):
+    csv_file = 'participant_data.csv'
+    data = {
+        'Scenario': scenario_details.to_dict(),
+        'Participant Decision': participant_decision,
+        'Timestamp': pd.Timestamp.now()
+    }
+    df = pd.DataFrame([data])
+    if os.path.exists(csv_file):
+        df.to_csv(csv_file, mode='a', header=False, index=False)
+    else:
+        df.to_csv(csv_file, mode='w', header=True, index=False)
+    st.success("Your decision has been recorded.")
+
+# Function to load and display data from the CSV file
+def load_data_from_csv():
+    csv_file = 'participant_data.csv'
+    if os.path.exists(csv_file):
+        df = pd.read_csv(csv_file)
+        return df
+    else:
+        st.warning("No data available yet.")
+        return pd.DataFrame()
+
+# Function to calculate total score
 def calculate_total_score(row, score_columns):
     total_score = 0
     for col in score_columns:
@@ -93,6 +123,7 @@ def calculate_total_score(row, score_columns):
                 pass
     return total_score
 
+# Function to extract average value from a range
 def extract_average_from_range(value):
     if isinstance(value, str):
         match = re.match(r"(\d+)-(\d+)", value)
@@ -108,6 +139,7 @@ def extract_average_from_range(value):
         return value
     return None
 
+# Function to apply override rules
 def apply_override_rules(row):
     cp_value = extract_average_from_range(row['Civilian_Presence'])
     if cp_value is None:
@@ -156,6 +188,7 @@ def apply_override_rules(row):
 
     return None, None
 
+# Function to explain model decision
 def explain_model_decision(scenario, model):
     feature_importances = model.feature_importances_
     reasoning = []
@@ -166,6 +199,7 @@ def explain_model_decision(scenario, model):
                 reasoning.append(f"{feature}: {scenario[feature]} (Importance: {importance * 100:.2f}%)")
     return reasoning
 
+# Function to execute the decision-making process
 def execute_decision_process(random_scenario, model, user_decision):
     # Step 1: Calculate Total Score if not already available
     score_columns = [col for col in trained_feature_columns if col.endswith('_Score')]
@@ -224,6 +258,7 @@ def main():
 
     # When the user clicks the button, execute the decision process
     if st.button("Submit Decision"):
+        save_data_to_csv(user_decision, scenario)
         execute_decision_process(scenario, rf_model_loaded, user_decision)
 
 if __name__ == "__main__":
