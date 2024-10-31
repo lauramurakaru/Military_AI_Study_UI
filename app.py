@@ -4,6 +4,7 @@ import joblib
 import random
 import re
 import os
+import plotly.express as px
 
 # -------------------------------
 # Load the Model and Feature Columns
@@ -239,6 +240,27 @@ def execute_decision_process(random_scenario, model, user_decision):
         else:
             st.write("No significant features contributed to the model's decision.")
 
+# Function to display data analysis dashboard
+def display_dashboard():
+    st.header("Data Analysis Dashboard")
+    participant_data = load_data_from_csv()
+    if not participant_data.empty:
+        st.write("### Summary of Participant Decisions")
+        st.dataframe(participant_data)
+
+        # Display counts of different decisions made
+        decision_counts = participant_data['Participant Decision'].value_counts()
+        st.write("### Decision Counts")
+        st.bar_chart(decision_counts)
+
+        # Time-series visualization of decisions made over time
+        st.write("### Decisions Over Time")
+        participant_data['Timestamp'] = pd.to_datetime(participant_data['Timestamp'])
+        fig = px.line(participant_data, x='Timestamp', y='Participant Decision', title='Decisions Over Time')
+        st.plotly_chart(fig)
+    else:
+        st.warning("No participant data available yet.")
+
 # -------------------------------
 # Main Function
 # -------------------------------
@@ -260,6 +282,10 @@ def main():
     if st.button("Submit Decision"):
         save_data_to_csv(user_decision, scenario)
         execute_decision_process(scenario, rf_model_loaded, user_decision)
+
+    # Display data analysis dashboard
+    if st.button("View Data Analysis Dashboard"):
+        display_dashboard()
 
 if __name__ == "__main__":
     main()
