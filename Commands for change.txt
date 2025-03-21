@@ -1,0 +1,18 @@
+﻿
+1. cd C:\Users\janar226\Desktop\StreamlitApp
+2. py -m streamlit run app.py
+
+Bash
+cd /c/Users/janar226/Desktop/StreamlitApp
+python -m streamlit run app.py
+
+_ _ _ _ _ _
+
+API:
+1. cd C:\Users\janar226\Desktop\StreamlitApp
+2. py -m streamlit run model_logic.py
+
+docker build -t fastapi-api .
+
+py -m uvicorn api:app --reload
+

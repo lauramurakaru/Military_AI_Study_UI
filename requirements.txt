@@ -1,4 +1,12 @@
-streamlit
+﻿streamlit
+gspread
+oauth2client
 pandas
 joblib
-scikit-learn
+matplotlib
+
+fastapi
+uvicorn[standard]
+pydantic==2.*
+scikit-learn==1.5.2
+python-docx
