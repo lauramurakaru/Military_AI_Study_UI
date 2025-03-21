@@ -1,6 +1,6 @@
 import joblib
 import pandas as pd
-from mappings import (
+from mappings_fixed import (
     Target_Category_Map, Target_Vulnerability_Map, Terrain_Type_Map, 
     Civilian_Presence_Map, Damage_Assessment_Map, Time_Sensitivity_Map, 
     Weaponeering_Map, Friendly_Fire_Map, Politically_Sensitive_Map, 
