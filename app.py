@@ -79,6 +79,13 @@ if st.button("Predict"):
     numeric_data = convert_raw_to_scores(raw_input)
     numeric_df = pd.DataFrame([numeric_data], columns=trained_feature_columns)
 
+    # Correct percentage calculation explicitly here:
+    percentages = {
+        k: (abs(v) / sum(abs(s) for key, s in numeric_data.items() if key != "Total_Score")) * 100
+        for k, v in numeric_data.items() if k != "Total_Score"
+    }
+
+
     override_decision, override_reason = apply_override_rules(raw_input, numeric_data)
 
     percentages = calculate_percentages(numeric_data)
