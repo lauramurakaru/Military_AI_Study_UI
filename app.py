@@ -75,9 +75,39 @@ raw_input = {key: st.selectbox(key.replace('_', ' '), list(mapping.keys())) for 
     ("Human_Military_Necessity", Human_Military_Necessity_Map),
 ]}
 
+def calculate_percentages(scores):
+    scores_filtered = {k: v for k, v in scores.items() if k != "Total_Score"}
+    total_abs = sum(abs(v) for v in scores_filtered.values())
+
+    if total_abs == 0:
+        return {k: 0 for k in scores_filtered}
+
+    raw_percentages = {k: (abs(v) / total_abs) * 100 for k, v in scores_filtered.items()}
+    rounded_percentages = {}
+    total_rounded = 0
+
+    sorted_items = sorted(raw_percentages.items(), key=lambda x: -x[1])
+    for k, v in sorted_items[:-1]:
+        r = round(v, 2)
+        rounded_percentages[k] = r
+        total_rounded += r
+
+    last_key = sorted_items[-1][0]
+    rounded_percentages[last_key] = round(100 - total_rounded, 2)
+
+    signed_percentages = {
+        key: rounded_percentages[key] if scores_filtered[key] >= 0 else -rounded_percentages[key]
+        for key in rounded_percentages
+    }
+
+    return signed_percentages
+
 if st.button("Predict"):
     numeric_data = convert_raw_to_scores(raw_input)
     numeric_df = pd.DataFrame([numeric_data], columns=trained_feature_columns)
+
+    percentages = calculate_percentages(numeric_data)
+
 
     override_decision, override_reason = apply_override_rules(raw_input, numeric_data)
 
