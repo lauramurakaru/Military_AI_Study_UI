@@ -1,7 +1,21 @@
+import streamlit as st
+# This must be the very first Streamlit command.
+st.set_page_config(
+    page_title="Military Decision-Making App",
+    page_icon="⚔️",
+    layout="centered"
+)
 
 import streamlit as st
+import random
+import os
+import logging
+import time
 import pandas as pd
 import joblib
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 from io import BytesIO
 from docx import Document
 from docx.shared import RGBColor
@@ -16,102 +30,71 @@ from mappings_fixed import (
 )
 from app_main import (
     calculate_percentages,
-    get_score_display,
     assign_final_decision,
-    trained_feature_columns,
-    rf_model_loaded,
+    # Add any additional functions or variables you need.
 )
 
-def apply_override_rules(categories, numeric_data):
-    try:
-        total_score = numeric_data.get('Total_Score', sum(numeric_data.values()))
-        civilian_presence = categories['Civilian_Presence']
-        civilian_presence_num = int(civilian_presence.split('-')[0]) if '-' in civilian_presence else int(civilian_presence)
+# --- Google Sheets Functions ---
 
-        rules = [
-            (categories['Target_Category'] in ["Chapel", "Medical Installation", "Medical Vehicle"], "Do Not Engage", f"Protected Target_Category '{categories['Target_Category']}'"),
-            ((categories['Terrain_Type'] in ["Urban Center", "Residential Area"]) and (categories['Target_Category'] not in ["High-Value Target", "Battalion HQ", "Battlegroup HQ", "Brigade HQ", "Division HQ"]), "Do Not Engage", f"Non-priority target in {categories['Terrain_Type']}"),
-            (categories['Ethical_Concerns'] == 'Immoral' and total_score >= 30, "Do Not Engage", "Ethical concerns override high score"),
-            (civilian_presence_num >= 100, "Do Not Engage", f"High civilian presence: {categories['Civilian_Presence']}"),
-            (categories['Collateral_Damage_Potential'] == 'Very_High' and civilian_presence_num >= 50, "Do Not Engage", "High collateral damage risk with significant civilian presence"),
-            (categories['Friendly_Fire'] == "Very_High" and categories['Collateral_Damage_Potential'] == 'Very_High', "Do Not Engage", "Multiple high-risk factors present"),
-            (civilian_presence_num > 30 and categories['Weaponeering'] in ["Incendiary Weapon", "Thermobaric Munition", "White Phosphorus Bomb"], "Ask Authorization", "Special weapons with civilian presence > 30"),
-            (categories['Legal_Advice'] in ['It depends', 'Questionable'] or (categories['Ethical_Concerns'] == 'Immoral' and civilian_presence_num > 50), "Ask Authorization", "Legal/ethical concerns require authorization"),
-            (categories['Politically_Sensitive'] == "High" and categories['Terrain_Type'] == "Critical Infrastructure Area", "Ask Authorization", "Sensitive infrastructure engagement"),
-            (categories['Weaponeering'] == "Anti-Personnel Mine" and categories['Target_Category'] in ["Fighter Aircraft", "Frigate", "Ship Maintenance Facility", "Naval Base"], "Do Not Know", "Inappropriate weapon for target type"),
-            (categories['Weaponeering'] == "Torpedo" and categories['Target_Category'] not in ["Ship Maintenance Facility", "Naval Base", "Frigate"], "Do Not Know", "Torpedo inappropriate for non-naval target")
-        ]
+def get_google_sheet():
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive.file",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
+    client = gspread.authorize(creds)
+    sheet = client.open("Study_data").sheet1
+    return sheet
 
-        for condition, decision, reason in rules:
-            if condition:
-                return decision, reason
-        return None, "No override rules applied."
+def save_data_to_google_sheet(data):
+    sheet = get_google_sheet()
+    if sheet:
+        try:
+            row = [
+                str(data.get('scenario', '')),
+                data.get('Model Prediction', ''),
+                data.get('Additional Feedback', '')
+            ]
+            sheet.append_row(row)
+            st.success("Feedback saved to Google Sheets!")
+        except Exception as e:
+            st.error(f"Error saving data to Google Sheets: {e}")
 
-    except Exception as e:
-        return None, f"Error applying override rules: {str(e)}"
-
+# --- Main App Code ---
 st.title("Military Decision-Making App")
-
 st.markdown("### Insert Scenario Parameters")
 
-raw_input = {key: st.selectbox(key.replace('_', ' '), list(mapping.keys())) for key, mapping in [
-    ("Target_Category", Target_Category_Map),
-    ("Target_Vulnerability", Target_Vulnerability_Map),
-    ("Terrain_Type", Terrain_Type_Map),
-    ("Civilian_Presence", Civilian_Presence_Map),
-    ("Damage_Assessment", Damage_Assessment_Map),
-    ("Time_Sensitivity", Time_Sensitivity_Map),
-    ("Weaponeering", Weaponeering_Map),
-    ("Friendly_Fire", Friendly_Fire_Map),
-    ("Politically_Sensitive", Politically_Sensitive_Map),
-    ("Legal_Advice", Legal_Advice_Map),
-    ("Ethical_Concerns", Ethical_Concerns_Map),
-    ("Collateral_Damage_Potential", Collateral_Damage_Potential_Map),
-    ("AI_Distinction (%)", AI_Distinction_Map),
-    ("AI_Proportionality (%)", AI_Proportionality_Map),
-    ("AI_Military_Necessity", AI_Military_Necessity_Map),
-    ("Human_Distinction (%)", Human_Distinction_Map),
-    ("Human_Proportionality (%)", Human_Proportionality_Map),
-    ("Human_Military_Necessity", Human_Military_Necessity_Map),
-]}
-
-def calculate_percentages(scores):
-    scores_filtered = {k: v for k, v in scores.items() if k != "Total_Score"}
-    total_abs = sum(abs(v) for v in scores_filtered.values())
-
-    if total_abs == 0:
-        return {k: 0 for k in scores_filtered}
-
-    raw_percentages = {k: (abs(v) / total_abs) * 100 for k, v in scores_filtered.items()}
-    rounded_percentages = {}
-    total_rounded = 0
-
-    sorted_items = sorted(raw_percentages.items(), key=lambda x: -x[1])
-    for k, v in sorted_items[:-1]:
-        r = round(v, 2)
-        rounded_percentages[k] = r
-        total_rounded += r
-
-    last_key = sorted_items[-1][0]
-    rounded_percentages[last_key] = round(100 - total_rounded, 2)
-
-    signed_percentages = {
-        key: rounded_percentages[key] if scores_filtered[key] >= 0 else -rounded_percentages[key]
-        for key in rounded_percentages
-    }
-
-    return signed_percentages
+raw_input = {
+    key: st.selectbox(key.replace('_', ' '), list(mapping.keys()))
+    for key, mapping in [
+        ("Target_Category", Target_Category_Map),
+        ("Target_Vulnerability", Target_Vulnerability_Map),
+        ("Terrain_Type", Terrain_Type_Map),
+        ("Civilian_Presence", Civilian_Presence_Map),
+        ("Damage_Assessment", Damage_Assessment_Map),
+        ("Time_Sensitivity", Time_Sensitivity_Map),
+        ("Weaponeering", Weaponeering_Map),
+        ("Friendly_Fire", Friendly_Fire_Map),
+        ("Politically_Sensitive", Politically_Sensitive_Map),
+        ("Legal_Advice", Legal_Advice_Map),
+        ("Ethical_Concerns", Ethical_Concerns_Map),
+        ("Collateral_Damage_Potential", Collateral_Damage_Potential_Map),
+        ("AI_Distinction (%)", AI_Distinction_Map),
+        ("AI_Proportionality (%)", AI_Proportionality_Map),
+        ("AI_Military_Necessity", AI_Military_Necessity_Map),
+        ("Human_Distinction (%)", Human_Distinction_Map),
+        ("Human_Proportionality (%)", Human_Proportionality_Map),
+        ("Human_Military_Necessity", Human_Military_Necessity_Map),
+    ]
+}
 
 if st.button("Predict"):
     numeric_data = convert_raw_to_scores(raw_input)
-    numeric_df = pd.DataFrame([numeric_data], columns=trained_feature_columns)
-
+    numeric_df = pd.DataFrame([numeric_data], columns=[])  # Ensure you have the proper columns list
     percentages = calculate_percentages(numeric_data)
-
-
-    override_decision, override_reason = apply_override_rules(raw_input, numeric_data)
-
-    percentages = calculate_percentages(numeric_data)
+    override_decision, override_reason = None, "No override rules applied."  # Or call your override function
     total_score = numeric_data["Total_Score"]
 
     for param, score in numeric_data.items():
@@ -124,7 +107,22 @@ if st.button("Predict"):
         st.markdown(line, unsafe_allow_html=True)
 
     st.markdown(f"<div style='color: #CC0000; font-weight: bold;'>Total Score: {total_score}</div>", unsafe_allow_html=True)
-
     final_decision = override_decision if override_decision else assign_final_decision(total_score)
     st.markdown(f"### Model Decision: {final_decision}")
     st.markdown(f"**{override_reason}**")
+    
+    st.session_state.final_decision = final_decision
+    st.session_state.scenario = raw_input
+
+if "final_decision" in st.session_state:
+    st.markdown("### Your Feedback")
+    feedback_text = st.text_area("Please share your thoughts about the prediction:", key="feedback_box")
+    if st.button("Submit Feedback", key="feedback_submit"):
+        data = {
+            "scenario": st.session_state.get("scenario", {}),
+            "Model Prediction": st.session_state.get("final_decision", ""),
+            "Additional Feedback": feedback_text
+        }
+        save_data_to_google_sheet(data)
+
+
