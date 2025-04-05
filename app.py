@@ -6,16 +6,14 @@ st.set_page_config(
     layout="centered"
 )
 
-import streamlit as st
 import random
 import os
 import logging
 import time
 import pandas as pd
 import joblib
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 from google.oauth2.service_account import Credentials
+import gspread
 from io import BytesIO
 from docx import Document
 from docx.shared import RGBColor
@@ -31,19 +29,18 @@ from mappings_fixed import (
 from app_main import (
     calculate_percentages,
     assign_final_decision,
-    # Add any additional functions or variables you need.
 )
 
 # --- Google Sheets Functions ---
-
 def get_google_sheet():
     scope = [
-        "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive.file",
         "https://www.googleapis.com/auth/drive"
     ]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=scope
+    )
     client = gspread.authorize(creds)
     sheet = client.open("Study_data").sheet1
     return sheet
@@ -92,9 +89,9 @@ raw_input = {
 
 if st.button("Predict"):
     numeric_data = convert_raw_to_scores(raw_input)
-    numeric_df = pd.DataFrame([numeric_data], columns=[])  # Ensure you have the proper columns list
+    numeric_df = pd.DataFrame([numeric_data], columns=[])  
     percentages = calculate_percentages(numeric_data)
-    override_decision, override_reason = None, "No override rules applied."  # Or call your override function
+    override_decision, override_reason = None, "No override rules applied."
     total_score = numeric_data["Total_Score"]
 
     for param, score in numeric_data.items():
@@ -114,6 +111,7 @@ if st.button("Predict"):
     st.session_state.final_decision = final_decision
     st.session_state.scenario = raw_input
 
+# Feedback section if a final decision has been made
 if "final_decision" in st.session_state:
     st.markdown("### Your Feedback")
     feedback_text = st.text_area("Please share your thoughts about the prediction:", key="feedback_box")
@@ -124,5 +122,3 @@ if "final_decision" in st.session_state:
             "Additional Feedback": feedback_text
         }
         save_data_to_google_sheet(data)
-
-
