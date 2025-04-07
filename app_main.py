@@ -11,20 +11,9 @@ from oauth2client.service_account import ServiceAccountCredentials
 # ---------------------------
 # Logging & Page Configuration
 # ---------------------------
-logging.basicConfig(level=logging.INFO)
-PAGE_CONFIG = {
-    "layout": "centered",
-    "page_title": "Military Decision-Making App",
-    "page_icon": "⚔️",
-    "initial_sidebar_state": "collapsed",
-    "menu_items": {
-        "Get Help": None,
-        "Report a bug": None,
-        "About": None
-    }
-}
 
-st.set_page_config(**PAGE_CONFIG)
+
+
 # ---------------------------
 # Session State Initialization (including multi-scenario variables)
 # ---------------------------
