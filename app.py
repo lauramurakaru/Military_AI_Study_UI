@@ -2,7 +2,7 @@ import streamlit as st
 # This must be the very first Streamlit command.
 st.set_page_config(
     page_title="Military Decision-Making App",
-    page_icon="⚔️",
+    page_icon="🛡️",
     layout="centered"
 )
 
@@ -12,7 +12,7 @@ import logging
 import time
 import pandas as pd
 import joblib
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 import gspread
 from io import BytesIO
 from docx import Document
@@ -32,20 +32,26 @@ from app_main import (
 )
 
 # --- Google Sheets Functions ---
+
 def get_google_sheet():
-    scope = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive.file",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(
-        st.secrets["gcp_service_account"],
-        scope
-    )
-    client = gspread.authorize(creds)
-    sheet = client.open("Study_data").sheet1
-    return sheet
+    try:
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        # Replace any escaped newline characters with actual newlines
+        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+        creds = Credentials.from_service_account_info(
+            creds_dict,
+            scopes=[
+                "https://spreadsheets.google.com/feeds",
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive.file",
+                "https://www.googleapis.com/auth/drive"
+            ]
+        )
+        client = gspread.authorize(creds)
+        return client.open("Study_data").sheet1
+    except Exception as e:
+        st.error(f"Error connecting to Google Sheets: {e}")
+        return None
 
 def save_data_to_google_sheet(data):
     sheet = get_google_sheet()
@@ -62,6 +68,7 @@ def save_data_to_google_sheet(data):
             st.error(f"Error saving data to Google Sheets: {e}")
 
 # --- Main App Code ---
+
 st.title("Military Decision-Making App")
 st.markdown("### Insert Scenario Parameters")
 
@@ -124,3 +131,4 @@ if "final_decision" in st.session_state:
             "Additional Feedback": feedback_text
         }
         save_data_to_google_sheet(data)
+

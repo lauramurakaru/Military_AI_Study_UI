@@ -6,14 +6,19 @@ import os
 import logging
 import time
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
+
 
 # ---------------------------
 # Logging & Page Configuration
 # ---------------------------
 
-
-
+if __name__ == "__main__":
+    st.set_page_config(
+        page_title="Military Decision-Making App",
+        page_icon="⚔️",
+        layout="centered"
+    )
 # ---------------------------
 # Session State Initialization (including multi-scenario variables)
 # ---------------------------
@@ -268,19 +273,21 @@ def apply_override_rules(row):
 
 def get_google_sheet():
     try:
-        scope = [
-            "https://spreadsheets.google.com/feeds",
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive.file",
-            "https://www.googleapis.com/auth/drive"
-        ]
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
+        # Ensure your secrets are loaded as a dictionary
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        # Replace escaped newlines with actual newlines in the private key
+        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+        creds = Credentials.from_service_account_info(
+            creds_dict,
+            scopes=[
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive"
+            ]
+        )
         client = gspread.authorize(creds)
-        sheet = client.open("Study_data").sheet1
-        return sheet
+        return client.open("Study_data").sheet1
     except Exception as e:
         st.error(f"Error connecting to Google Sheets: {e}")
-        logging.error(f"Error connecting to Google Sheets: {e}")
         return None
 
 def save_data_to_google_sheet(data):
