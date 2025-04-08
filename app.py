@@ -6,6 +6,21 @@ st.set_page_config(
     layout="centered"
 )
 
+
+st.markdown(
+    """
+    <style>
+    * {
+        font-size: 15px !important;
+    }
+    html, body {
+        font-size: 10px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 import random
 import os
 import logging
@@ -59,18 +74,27 @@ def save_data_to_google_sheet(data):
         try:
             row = [
                 str(data.get('scenario', '')),
-                data.get('Model Prediction', ''),
-                data.get('Additional Feedback', '')
+                data.get('Participant Decision', ''),      
+                data.get('Model Prediction', ''),           
+                data.get('Decision Time (seconds)', ''),      
+                data.get('Confirmation Feedback', ''),          
+                data.get('Additional Feedback', '')           
             ]
+
             sheet.append_row(row)
             st.success("Feedback saved to Google Sheets!")
         except Exception as e:
             st.error(f"Error saving data to Google Sheets: {e}")
 
+
 # --- Main App Code ---
+
+
+
 
 st.title("Military Decision-Making App")
 st.markdown("### Insert Scenario Parameters")
+
 
 raw_input = {
     key: st.selectbox(key.replace('_', ' '), list(mapping.keys()))
